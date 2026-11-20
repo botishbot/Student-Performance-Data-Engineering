@@ -184,4 +184,4 @@ Run the test suite from the repository root:
 python -m pytest
 ```
 
-Tests cover duplicate removal, schema and value validation, feature thresholds, and an end-to-end run using a temporary Excel workbook. GitHub Actions runs the test suite on pushes and pull requests using Python 3.11 and 3.12.
+Tests cover duplicate removal, schema and value validation, feature thresholds, an end-to-end run using a temporary Excel workbook, and validation of the committed 395-row source workbook. GitHub Actions runs the test suite on pushes and pull requests using Python 3.11 and 3.12.
