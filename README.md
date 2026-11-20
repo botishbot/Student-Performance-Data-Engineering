@@ -56,6 +56,14 @@ Student-Performance-Data-Engineering/
 │   ├── 03_feature_engineering.ipynb
 │   ├── 04_data_transformation.ipynb
 │   └── 05_model_preparation_and_training.ipynb
+├── src/
+│   └── student_performance_pipeline.py
+├── tests/
+│   └── test_pipeline.py
+├── docs/
+│   └── PIPELINE.md
+├── .github/workflows/
+│   └── tests.yml
 ├── outputs/
 │   ├── figures/
 │   └── metrics/
@@ -138,19 +146,42 @@ The Decision Tree has the highest Fail-class recall and macro F1 in this particu
 - Model metrics: `outputs/metrics/model_comparison.csv`
 - Model comparison chart and confusion matrices: `outputs/figures/`
 
-The notebooks are the primary record of the current implementation. Re-run them to regenerate the outputs.
+The notebooks remain the primary record of the exploration and modelling experiment. The reusable script covers the repeatable cleaning and feature-engineering stage.
 
 ## Current scope and future improvements
 
 The repository currently demonstrates a notebook-based data workflow and a small classification experiment. It is not yet a production data pipeline. Sensible next steps include:
 
-1. Add automated data-quality checks (schema, allowed values, ranges, and row-count checks).
-2. Move repeatable cleaning and feature-building logic into reusable Python modules or scripts.
-3. Add cross-validation and compare results across multiple folds.
-4. Save the fitted preprocessing/model pipeline and document how to reproduce predictions.
-5. Add tests and a lightweight continuous-integration workflow.
-6. Document the dataset's original source and usage terms.
+1. Add cross-validation and compare model results across multiple folds.
+2. Save the fitted preprocessing/model pipeline and document how to reproduce predictions.
+3. Document the dataset's original source and usage terms once they have been verified.
+4. Consider orchestration only if the project grows beyond a single local workbook.
 
 ## Author
 
 Created by [botishbot](https://github.com/botishbot) as a student learning project.
+
+
+## Reproducible processing pipeline
+
+The notebooks provide the step-by-step learning record. For repeatable processing without manually executing notebook cells, run the reusable module from the repository root:
+
+```bash
+python -m src.student_performance_pipeline
+```
+
+The script reads `data/raw/DTS_202_Dataset.xlsx` and writes the cleaned and feature-engineered CSV files to `data/processed/`. Optional paths can be supplied with `--input` and `--output-dir`.
+
+The pipeline checks the expected 33-column schema, missing values, numeric ranges, and known categorical values. It removes exact duplicate rows, but does not silently fill missing values, remove statistical outliers, or discard invalid records. If validation fails, processing stops with an explanatory error so the source data can be reviewed. The source workbook is never modified.
+
+The engineered fields follow the notebook's project assumptions: grade bands of 0–9 / 10–14 / 15–20; regular attendance at 10 or fewer absences; `Study_Load = studytime - failures`; and Pass for `G3 >= 10`.
+
+## Automated tests
+
+Run the test suite from the repository root:
+
+```bash
+python -m pytest
+```
+
+Tests cover duplicate removal, schema and value validation, feature thresholds, and an end-to-end run using a temporary Excel workbook. GitHub Actions runs the test suite on pushes and pull requests using Python 3.11 and 3.12.
