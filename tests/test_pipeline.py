@@ -98,3 +98,19 @@ def test_pipeline_reads_excel_and_writes_both_outputs(tmp_path):
     assert result.input_rows == 2
     assert pd.read_csv(cleaned_path).shape == (2, 33)
     assert "Pass_Fail" in pd.read_csv(featured_path).columns
+
+
+
+def test_committed_source_workbook_passes_pipeline_validation(tmp_path):
+    from pathlib import Path
+
+    repository_root = Path(__file__).resolve().parents[1]
+    source = repository_root / "data" / "raw" / "DTS_202_Dataset.xlsx"
+    assert source.exists(), "The committed source workbook is required for this integration test."
+
+    result = run_pipeline(source, tmp_path / "actual-workbook-output")
+
+    assert result.input_rows == 395
+    assert result.duplicates_removed == 0
+    assert result.cleaned.shape == (395, 33)
+    assert result.featured.shape == (395, 37)
