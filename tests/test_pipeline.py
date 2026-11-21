@@ -94,6 +94,7 @@ def test_out_of_range_grade_is_rejected():
 
 def test_fractional_grade_is_rejected():
     data = make_valid_data()
+    data["G3"] = data["G3"].astype(float)
     data.loc[0, "G3"] = 9.5
 
     with pytest.raises(ValueError, match="whole numbers"):
@@ -102,6 +103,7 @@ def test_fractional_grade_is_rejected():
 
 def test_non_finite_absence_value_is_rejected():
     data = make_valid_data()
+    data["absences"] = data["absences"].astype(float)
     data.loc[0, "absences"] = float("inf")
 
     with pytest.raises(ValueError, match="finite numbers"):
