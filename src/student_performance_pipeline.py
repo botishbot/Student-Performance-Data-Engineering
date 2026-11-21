@@ -7,6 +7,7 @@ being silently imputed or discarded.
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 from typing import NamedTuple
 
@@ -40,6 +41,7 @@ NUMERIC_RANGES = {
     "G3": (0, 20),
 }
 NON_NEGATIVE_COLUMNS = ["absences"]
+NUMERIC_COLUMNS = [*NUMERIC_RANGES, *NON_NEGATIVE_COLUMNS]
 
 CATEGORY_VALUES = {
     "school": {"GP", "MS"},
@@ -69,8 +71,22 @@ class PipelineResult(NamedTuple):
     duplicates_removed: int
 
 
+def _numeric_series(data: pd.DataFrame, column: str) -> pd.Series:
+    """Convert one numeric field for validation and derived calculations."""
+    try:
+        values = pd.to_numeric(data[column], errors="raise")
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Column '{column}' contains non-numeric values.") from exc
+
+    if not values.map(lambda value: math.isfinite(float(value))).all():
+        raise ValueError(f"Column '{column}' must contain finite numbers.")
+    if values.mod(1).ne(0).any():
+        raise ValueError(f"Column '{column}' must contain whole numbers.")
+    return values
+
+
 def validate_dataset(data: pd.DataFrame) -> None:
-    """Validate the source schema and values without changing the data."""
+    """Validate the exact source schema and values without changing the data."""
     if data.empty:
         raise ValueError("The dataset is empty.")
 
@@ -79,8 +95,11 @@ def validate_dataset(data: pd.DataFrame) -> None:
         raise ValueError(f"Duplicate column names found: {duplicated}")
 
     missing_columns = sorted(set(REQUIRED_COLUMNS) - set(data.columns))
+    unexpected_columns = sorted(set(data.columns) - set(REQUIRED_COLUMNS))
     if missing_columns:
         raise ValueError(f"Missing required columns: {missing_columns}")
+    if unexpected_columns:
+        raise ValueError(f"Unexpected columns found: {unexpected_columns}")
 
     missing_values = data[REQUIRED_COLUMNS].isna().sum()
     missing_values = missing_values[missing_values > 0]
@@ -91,9 +110,7 @@ def validate_dataset(data: pd.DataFrame) -> None:
         raise ValueError(f"Missing values found; resolve them before continuing ({details}).")
 
     for column, (minimum, maximum) in NUMERIC_RANGES.items():
-        values = pd.to_numeric(data[column], errors="coerce")
-        if values.isna().any():
-            raise ValueError(f"Column '{column}' contains non-numeric values.")
+        values = _numeric_series(data, column)
         invalid = ~values.between(minimum, maximum)
         if invalid.any():
             examples = values[invalid].head(5).tolist()
@@ -103,8 +120,8 @@ def validate_dataset(data: pd.DataFrame) -> None:
             )
 
     for column in NON_NEGATIVE_COLUMNS:
-        values = pd.to_numeric(data[column], errors="coerce")
-        if values.isna().any() or (values < 0).any():
+        values = _numeric_series(data, column)
+        if (values < 0).any():
             raise ValueError(f"Column '{column}' must contain non-negative numbers.")
 
     for column, allowed in CATEGORY_VALUES.items():
@@ -118,11 +135,16 @@ def validate_dataset(data: pd.DataFrame) -> None:
 
 
 def clean_data(data: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """Remove exact duplicate rows and validate the remaining records."""
+    """Remove exact duplicate rows, validate, and normalise numeric columns."""
     input_rows = len(data)
     cleaned = data.drop_duplicates().copy().reset_index(drop=True)
     duplicates_removed = input_rows - len(cleaned)
     validate_dataset(cleaned)
+
+    # Store numeric-looking Excel/text values as numbers before later calculations.
+    for column in NUMERIC_COLUMNS:
+        cleaned[column] = _numeric_series(cleaned, column)
+
     return cleaned, duplicates_removed
 
 
@@ -130,6 +152,10 @@ def engineer_features(cleaned: pd.DataFrame) -> pd.DataFrame:
     """Create the project's derived columns using its documented thresholds."""
     validate_dataset(cleaned)
     featured = cleaned.copy()
+
+    # Keep this function safe when called directly with numeric strings.
+    for column in NUMERIC_COLUMNS:
+        featured[column] = _numeric_series(featured, column)
 
     featured["Grade_Category"] = pd.cut(
         featured["G3"],
