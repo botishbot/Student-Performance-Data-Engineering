@@ -68,6 +68,14 @@ def test_missing_required_column_is_rejected():
         validate_dataset(data)
 
 
+def test_unexpected_column_is_rejected():
+    data = make_valid_data()
+    data["extra_field"] = "unexpected"
+
+    with pytest.raises(ValueError, match="Unexpected columns"):
+        validate_dataset(data)
+
+
 def test_missing_values_are_not_silently_imputed():
     data = make_valid_data()
     data.loc[0, "G3"] = None
@@ -84,6 +92,33 @@ def test_out_of_range_grade_is_rejected():
         validate_dataset(data)
 
 
+def test_fractional_grade_is_rejected():
+    data = make_valid_data()
+    data.loc[0, "G3"] = 9.5
+
+    with pytest.raises(ValueError, match="whole numbers"):
+        validate_dataset(data)
+
+
+def test_non_finite_absence_value_is_rejected():
+    data = make_valid_data()
+    data.loc[0, "absences"] = float("inf")
+
+    with pytest.raises(ValueError, match="finite numbers"):
+        validate_dataset(data)
+
+
+def test_numeric_text_is_normalised_before_feature_calculation():
+    data = make_valid_data()
+    data["studytime"] = data["studytime"].astype(str)
+    data["failures"] = data["failures"].astype(str)
+
+    featured = engineer_features(data)
+
+    assert featured["Study_Load"].tolist() == [2, 2]
+    assert pd.api.types.is_numeric_dtype(featured["studytime"])
+
+
 def test_pipeline_reads_excel_and_writes_both_outputs(tmp_path):
     source = tmp_path / "source.xlsx"
     output = tmp_path / "processed"
@@ -98,7 +133,6 @@ def test_pipeline_reads_excel_and_writes_both_outputs(tmp_path):
     assert result.input_rows == 2
     assert pd.read_csv(cleaned_path).shape == (2, 33)
     assert "Pass_Fail" in pd.read_csv(featured_path).columns
-
 
 
 def test_committed_source_workbook_passes_pipeline_validation(tmp_path):
